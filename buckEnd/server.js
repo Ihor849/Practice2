@@ -1,3 +1,4 @@
+const { engine } = require("express-handlebars");
 require("colors");
 const path = require("path");
 const configPath = path.join(__dirname, "..", "config", ".env");
@@ -10,6 +11,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const authMiddleware = require("./middlewares/authMiddleware");
 const rolesModel = require("./models/rolesModel");
+const sendEmail = require('./service/sendEmail');
+require("dotenv").config();
 
 // console.log("Hello from Max");
 // console.log(require("dotenv").config({path: configPath}));
@@ -20,15 +23,53 @@ const rolesModel = require("./models/rolesModel");
 const express = require("express");
 const { generateKey } = require("crypto");
 
+
 const app = express();
+
+//Підключення статікі картінок
+ app.use(express.static("public"));
+
+// Set template engine
+app.engine("handlebars", engine());
+app.set("view engine", "handlebars");
+app.set("views", "buckEnd/views");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+//Роути сторінок =====
+app.get("/", (req, res) => {
+  res.render("home");
+});
+
+app.get("/about", (req, res) => {
+  res.render("about");
+});
+
+app.get("/contact", (req, res) => {
+  res.render("contact");
+});
+//=======================
+//======= POST запит ==========//
+app.post("/sended", (req, res) => {
+  // res.send(req.body);
+  res.render("sended", {
+    message: "Contact form send success",
+    name: req.body.userName,
+    email: req.body.userEmail,
+  });
+  sendEmail(req.body);
+});
+
 app.use("/api/v1", require("./routes/drinksRoutes"));
 
+//========Лонтроллер регістрациї
+app.get("/signup", (req, res) => {
+  res.render("signup");
+});
 // Реєстрація - це збереження користувача в базі данних
-app.post("/register",
+app.post(
+  "/register",
   asyncHandler(async (req, res) => {
     // Отримуємо та валідуємо данні від користувача
     const { email, password } = req.body;
@@ -49,13 +90,13 @@ app.post("/register",
     // console.log( hashPassword);
 
     // Додаємо роль користувача
-    const roles = await rolesModel.findOne({value: "USER"})
+    const roles = await rolesModel.findOne({ value: "USER" });
 
     // Зберігаемо користувача у БД
     const user = await usersModel.create({
       ...req.body,
       password: hashPassword,
-      roles: [roles.value]
+      roles: [roles.value],
     });
     res.status(201).json({
       code: 201,
@@ -69,7 +110,8 @@ app.post("/register",
 );
 
 // Аутентифікація - це перевірка данних які передав користувач і порівняння з тими яки є у базі данних
-app.post("/login",
+app.post(
+  "/login",
   asyncHandler(async (req, res) => {
     // Отримуємо та валідуємо данні від користувача
     const { email, password } = req.body;
@@ -91,7 +133,6 @@ app.post("/login",
       req.status = 400;
       throw new Error("Invalid login or password");
     }
-    
 
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     // Може бути записано в один ИФ
@@ -106,16 +147,16 @@ app.post("/login",
 
     //Отримуємо TOKEN
     const token = generateToken({
-       friends: ["Dima", "Ihor", "Max"],
-        id: user._id,
-        roles: user.roles
-      })
+      friends: ["Dima", "Ihor", "Max"],
+      id: user._id,
+      roles: user.roles,
+    });
     // console.log("token" token);
 
     // Записуємо token юзеру в БД
     user.token = token;
     await user.save();
-     res.status(200).json({
+    res.status(200).json({
       code: 200,
 
       data: {
@@ -123,35 +164,33 @@ app.post("/login",
         token: user.token, // Беремо token з стр. 105
       },
     });
-
   })
 );
 // Авторизація - це перевірка прав доступу
 
 // Розлогінення - вихід з приложенія
-app.get("/logout",
-authMiddleware,
+app.get(
+  "/logout",
+  authMiddleware,
   asyncHandler(async (req, res) => {
-   console.log(req.user.id);
-   const {id} = req.user;
-   const user = await usersModel.findById(id);
-   user.token = null;
-   await user.save();
-   res.status(200).json({
-    code: 200,
-    data: {
-      message: "Logout success",
-      email: user.email,
-    },
-  });
-
+    console.log(req.user.id);
+    const { id } = req.user;
+    const user = await usersModel.findById(id);
+    user.token = null;
+    await user.save();
+    res.status(200).json({
+      code: 200,
+      data: {
+        message: "Logout success",
+        email: user.email,
+      },
+    });
   })
 );
 
-
 function generateToken(data) {
-const payload = {...data}
-return jwt.sign(payload,"pizza",{expiresIn: "24h"})
+  const payload = { ...data };
+  return jwt.sign(payload, "pizza", { expiresIn: "24h" });
 }
 
 app.use(errorHandler);
