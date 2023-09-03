@@ -63,7 +63,7 @@ app.post("/sended", (req, res) => {
 
 app.use("/api/v1", require("./routes/drinksRoutes"));
 
-//========Лонтроллер регістрациї
+//========Контроллер регістрациї
 app.get("/signup", (req, res) => {
   res.render("signup");
 });
